@@ -10,6 +10,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from fastapi.responses import JSONResponse
 import json
+import ast
 
 
 
@@ -21,8 +22,6 @@ app = FastAPI()
 class ScrapeRequest(BaseModel):
     url: str
     instructions: str
-    # depth: int = 1
-    # keywords: list = []
 
 
 load_dotenv()
@@ -55,18 +54,18 @@ prompt_template = ChatPromptTemplate.from_messages(
 llm_chain = prompt_template | llm
 
 
-
 def extract_information(instructions):
     response_keywords = llm_chain.invoke({
-        "instructions": f"Instructions: {instructions}\n\n What are the most relevant keywords related to this instruction? Provide me the keywords as a list of strings, for example: ['keyword1', 'keyword2']."
+        "instructions": f"Instructions: {instructions}\n\n What are the most relevant keywords related to this instruction? Provide me the keywords as a list of strings, for example: ['keyword1', 'keyword2']." 
     })
     keywords = str(response_keywords.content).strip()
     
     if keywords.startswith("[") and keywords.endswith("]"):
-        
-        keywords = eval(keywords)  
+        try:
+            keywords = ast.literal_eval(keywords)
+        except (ValueError, SyntaxError) as e:
+            keywords = [keywords]  
     else:
-
         keywords = [keywords]
     
     return keywords
@@ -78,8 +77,6 @@ async def scrape(request: ScrapeRequest):
     instructions = request.instructions
     depth = 1
     keywords = extract_information(request.instructions)
-    
-    print(keywords)
 
     if not url or not instructions:
         raise HTTPException(status_code=400, detail="URL and instructions are required")
